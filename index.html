@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣地理大富翁 </title>
+    <style>
+        :root {
+            --p1-color: #ff5252; /* 紅 */
+            --p2-color: #2979ff; /* 藍 */
+            --p3-color: #00e676; /* 綠 */
+            --p4-color: #ffea00; /* 黃 */
+            --board-bg: #81d4fa;
+            --cell-bg: #ffffff;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", "Heiti TC", sans-serif;
+            background-color: #e0f7fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 { color: #006064; margin: 0 0 15px 0; font-size: 24px; }
+
+        /* 遊戲主容器 */
+        .game-wrapper {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* --- 棋盤區 (CSS Grid) --- */
+        #board {
+            display: grid;
+            grid-template-columns: repeat(6, 90px); /* 6行 */
+            grid-template-rows: repeat(6, 90px);    /* 6列 */
+            gap: 6px;
+            background-color: var(--board-bg);
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .cell {
+            background-color: var(--cell-bg);
+            border: 1px solid #b0bec5;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            padding: 4px;
+            position: relative;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        /* 買下後的樣式 (透過 JS 動態修改 border) */
+        .cell-owned {
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+
+        .cell-name { font-weight: bold; margin-top: 5px; line-height: 1.2; }
+        .cell-price { font-size: 11px; color: #666; margin-bottom: 2px; }
+        
+        /* 特殊格子顏色 */
+        .type-start { background-color: #ffccbc; }
+        .type-chance { background-color: #ffe0b2; }
+        .type-jail { background-color: #cfd8dc; }
+
+        /* --- 玩家棋子 --- */
+        .players-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 3px;
+            width: 100%;
+            height: 20px;
+        }
+        .token {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 2px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        /* --- 控制面板區 --- */
+        #controls {
+            width: 280px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            max-height: 600px;
+        }
+
+        /* 玩家狀態卡 */
+        .player-info {
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border-left: 6px solid #ccc;
+            background: #f5f5f5;
+            transition: transform 0.2s;
+        }
+        
+        .p1-stats { border-color: var(--p1-color); }
+        .p2-stats { border-color: var(--p2-color); }
+        .p3-stats { border-color: var(--p3-color); }
+        .p4-stats { border-color: var(--p4-color); }
+
+        .active-turn {
+            background: #fffDE7;
+            transform: scale(1.03);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-weight: bold;
+        }
+
+        .player-money { font-size: 16px; color: #333; }
+        
+        /* 地產列表文字 */
+        .land-list {
+            font-size: 12px;
+            color: #555;
+            margin-top: 4px;
+            line-height: 1.4;
+            min-height: 1.4em;
+            word-wrap: break-word;
+        }
+
+        /* 骰子與訊息區 */
+        #dice-area {
+            margin-top: auto;
+            text-align: center;
+            padding-top: 15px;
+            border-top: 2px dashed #eee;
+        }
+        
+        #dice-display {
+            font-size: 48px;
+            margin: 10px 0;
+            min-height: 60px;
+        }
+
+        #dice-btn {
+            background: linear-gradient(to bottom, #ff7043, #f4511e);
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            font-size: 18px;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #d84315;
+            transition: all 0.1s;
+        }
+        #dice-btn:active { transform: translateY(4px); box-shadow: none; }
+        #dice-btn:disabled { background: #bdbdbd; box-shadow: none; cursor: not-allowed; }
+
+        #message-log {
+            margin-top: 15px;
+            height: 120px;
+            overflow-y: auto;
+            background: #fafafa;
+            border: 1px solid #eee;
+            padding: 8px;
+            font-size: 13px;
+            border-radius: 5px;
+            color: #444;
+        }
+        #message-log div { margin-bottom: 4px; border-bottom: 1px solid #f0f0f0; }
+
+        /* --- 彈出視窗 (Modal) --- */
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(2px);
+        }
+
+        #quiz-box {
+            background: white;
+            width: 90%;
+            max-width: 400px;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+            animation: popIn 0.3s ease;
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        #modal-title { color: #00695c; margin-top: 0; }
+        #modal-desc { margin-bottom: 20px; color: #555; font-size: 15px; }
+
+        .option-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: white;
+            border: 2px solid #81d4fa;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            color: #0277bd;
+            transition: background 0.2s;
+        }
+        .option-btn:hover { background: #e1f5fe; }
+    </style>
+</head>
+<body>
+
+    <h1>台灣走透透：地理大富翁</h1>
+
+    <div class="game-wrapper">
+        <div id="board"></div>
+
+        <div id="controls">
+            <div id="p1-info" class="player-info p1-stats">
+                <div class="player-money">玩家1 (紅): $<span id="p1-money">5000</span></div>
+                <div id="p1-lands" class="land-list">地產: 無</div>
+            </div>
+            <div id="p2-info" class="player-info p2-stats">
+                <div class="player-money">玩家2 (藍): $<span id="p2-money">5000</span></div>
+                <div id="p2-lands" class="land-list">地產: 無</div>
+            </div>
+            <div id="p3-info" class="player-info p3-stats">
+                <div class="player-money">玩家3 (綠): $<span id="p3-money">5000</span></div>
+                <div id="p3-lands" class="land-list">地產: 無</div>
+            </div>
+            <div id="p4-info" class="player-info p4-stats">
+                <div class="player-money">玩家4 (黃): $<span id="p4-money">5000</span></div>
+                <div id="p4-lands" class="land-list">地產: 無</div>
+            </div>
+
+            <div id="dice-area">
+                <div id="dice-display">🎲</div>
+                <button id="dice-btn" onclick="rollDice()">擲骰子</button>
+            </div>
+
+            <div id="message-log">
+                <div>歡迎來到台灣大富翁！</div>
+                <div>請玩家1開始擲骰子。</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="quiz-box">
+            <h2 id="modal-title">標題</h2>
+            <p id="modal-desc">描述文字</p>
+            <div id="modal-options">
+                </div>
+        </div>
+    </div>
+
+<script>
+    // --- 遊戲資料 ---
+    
+    // 地圖配置 (20格)
+    // type: start, city, chance, jail
+    const mapData = [
+        { name: '台北(起點)', type: 'start', price: 0 },
+        { name: '新北市', type: 'city', price: 2000, rent: 500, desc: '人口最多，有耶誕城' },
+        { name: '桃園市', type: 'city', price: 1500, rent: 300, desc: '國際機場，也是千塘之鄉' },
+        { name: '新竹市', type: 'city', price: 1200, rent: 250, desc: '台灣矽谷，特產米粉貢丸' },
+        { name: '苗栗縣', type: 'city', price: 1000, rent: 200, desc: '山城，有著名的龍騰斷橋' },
+        { name: '命運',    type: 'chance', price: 0 },
+        { name: '台中市', type: 'city', price: 1800, rent: 400, desc: '氣候宜人，有歌劇院' },
+        { name: '彰化縣', type: 'city', price: 1000, rent: 200, desc: '八卦山大佛，花卉故鄉' },
+        { name: '南投縣', type: 'city', price: 1200, rent: 250, desc: '唯一不靠海，有日月潭' },
+        { name: '雲林縣', type: 'city', price: 800, rent: 150, desc: '農業大縣，布袋戲故鄉' },
+        { name: '休息站', type: 'jail', price: 0 }, // 第10格
+        { name: '嘉義市', type: 'city', price: 1000, rent: 200, desc: '火雞肉飯，管樂之都' },
+        { name: '台南市', type: 'city', price: 1600, rent: 350, desc: '古蹟最多，美食之都' },
+        { name: '高雄市', type: 'city', price: 1800, rent: 400, desc: '港都，有85大樓與駁二' },
+        { name: '屏東縣', type: 'city', price: 1200, rent: 250, desc: '台灣最南端，墾丁大街' },
+        { name: '機會',    type: 'chance', price: 0 },
+        { name: '台東縣', type: 'city', price: 1000, rent: 200, desc: '熱氣球嘉年華，釋迦好' },
+        { name: '花蓮縣', type: 'city', price: 1200, rent: 250, desc: '太魯閣峽谷，瑞穗牧場' },
+        { name: '宜蘭縣', type: 'city', price: 1000, rent: 200, desc: '三星蔥，礁溪溫泉' },
+        { name: '基隆市', type: 'city', price: 800, rent: 150, desc: '雨都，廟口夜市鼎邊銼' }
+    ];
+
+    // 題庫 (可自行擴充)
+    const questions = [
+        { q: "請問「風城」是哪個城市的別稱？", opts: ["台北市", "新竹市", "基隆市", "高雄市"], ans: 1 },
+        { q: "台灣最高的山「玉山」位於南投縣與哪裡的交界？", opts: ["嘉義縣", "花蓮縣", "宜蘭縣", "台中市"], ans: 0 },
+        { q: "哪一個縣市以「三星蔥」聞名？", opts: ["屏東縣", "宜蘭縣", "彰化縣", "台東縣"], ans: 1 },
+        { q: "著名的「太魯閣國家公園」位於哪裡？", opts: ["花蓮縣", "台東縣", "南投縣", "台北市"], ans: 0 },
+        { q: "台灣唯一不靠海的縣市是？", opts: ["嘉義縣", "南投縣", "雲林縣", "苗栗縣"], ans: 1 },
+        { q: "請問「赤崁樓」與「安平古堡」位於？", opts: ["新北市", "台中市", "台南市", "高雄市"], ans: 2 },
+        { q: "每到九月會吹起強勁的「九降風」是在哪裡？", opts: ["屏東", "新竹", "基隆", "淡水"], ans: 1 },
+        { q: "著名的「墾丁國家公園」位於哪個縣市？", opts: ["高雄市", "屏東縣", "台東縣", "花蓮縣"], ans: 1 },
+        { q: "哪個城市被稱為「雨都」？", opts: ["台北市", "基隆市", "宜蘭縣", "新北市"], ans: 1 },
+        { q: "台灣最大的國際機場位於？", opts: ["台北市", "新北市", "桃園市", "高雄市"], ans: 2 }
+    ];
+
+    // 玩家初始資料
+    const players = [
+        { id: 0, name: '玩家1', color: 'var(--p1-color)', money: 5000, pos: 0, stop: 0 },
+        { id: 1, name: '玩家2', color: 'var(--p2-color)', money: 5000, pos: 0, stop: 0 },
+        { id: 2, name: '玩家3', color: 'var(--p3-color)', money: 5000, pos: 0, stop: 0 },
+        { id: 3, name: '玩家4', color: 'var(--p4-color)', money: 5000, pos: 0, stop: 0 }
+    ];
+
+    let currentTurn = 0; // 0~3
+    let landOwners = Array(mapData.length).fill(null); // 紀錄地主 ID
+
+    // --- 初始化程式 ---
+    
+    function initGame() {
+        const boardEl = document.getElementById('board');
+        
+        // 依據順序將格子排入 CSS Grid (6x6 外圈)
+        // 順序：上排(左到右) -> 右排(上到下) -> 下排(右到左) -> 左排(下到上)
+        mapData.forEach((data, i) => {
+            let cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.id = `cell-${i}`; // 給每個格子獨立 ID
+
+            // 處理特殊格子樣式
+            if(data.type === 'start') cell.classList.add('type-start');
+            if(data.type === 'chance') cell.classList.add('type-chance');
+            if(data.type === 'jail') cell.classList.add('type-jail');
+
+            // 計算 Grid 位置
+            let r, c;
+            if(i < 6) { r = 1; c = i + 1; } // Top
+            else if(i < 10) { r = i - 4; c = 6; } // Right
+            else if(i < 16) { r = 6; c = 6 - (i - 10); } // Bottom
+            else { r = 6 - (i - 15); c = 1; } // Left
+            
+            cell.style.gridRow = r;
+            cell.style.gridColumn = c;
+
+            // 顯示文字
+            let priceText = data.price > 0 ? `$${data.price}` : '';
+            cell.innerHTML = `
+                <div class="cell-name">${data.name}</div>
+                <div class="cell-price">${priceText}</div>
+                <div class="players-container" id="players-in-${i}"></div>
+            `;
+            boardEl.appendChild(cell);
+        });
+
+        drawPlayers();
+        updateUI();
+    }
+
+    // 繪製棋子
+    function drawPlayers() {
+        // 先清空所有格子的棋子容器
+        for(let i=0; i<mapData.length; i++) {
+            document.getElementById(`players-in-${i}`).innerHTML = '';
+        }
+        // 重新放置
+        players.forEach(p => {
+            let container = document.getElementById(`players-in-${p.pos}`);
+            let token = document.createElement('div');
+            token.className = 'token';
+            token.style.backgroundColor = p.color;
+            container.appendChild(token);
+        });
+    }
+
+    // 更新 UI 介面 (金錢、狀態、地產列表)
+    function updateUI() {
+        players.forEach((p, i) => {
+            // 金錢
+            document.getElementById(`p${i+1}-money`).innerText = p.money;
+            
+            // 輪到誰，加亮邊框
+            let infoBox = document.getElementById(`p${i+1}-info`);
+            if (i === currentTurn) infoBox.classList.add('active-turn');
+            else infoBox.classList.remove('active-turn');
+
+            // 更新地產列表文字
+            updateLandList(i);
+        });
+    }
+
+    // 更新某位玩家的地產列表文字
+    function updateLandList(playerId) {
+        let lands = [];
+        landOwners.forEach((owner, idx) => {
+            if (owner === playerId) {
+                lands.push(mapData[idx].name);
+            }
+        });
+        
+        let text = lands.length > 0 ? "地產: " + lands.join("、") : "地產: 無";
+        document.getElementById(`p${playerId+1}-lands`).innerText = text;
+    }
+
+    function log(msg) {
+        let logEl = document.getElementById('message-log');
+        let div = document.createElement('div');
+        div.innerText = msg;
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // --- 遊戲邏輯 ---
+
+    function rollDice() {
+        let btn = document.getElementById('dice-btn');
+        btn.disabled = true;
+        
+        let p = players[currentTurn];
+
+        // 檢查是否暫停
+        if (p.stop > 0) {
+            p.stop--;
+            log(`${p.name} 暫停中 (剩 ${p.stop} 回合)`);
+            setTimeout(nextTurn, 1000);
+            return;
+        }
+
+        // 骰子動畫
+        let steps = Math.floor(Math.random() * 6) + 1;
+        let display = document.getElementById('dice-display');
+        let count = 0;
+        let anim = setInterval(() => {
+            display.innerText = "🎲 " + (Math.floor(Math.random()*6)+1);
+            count++;
+            if(count > 10) {
+                clearInterval(anim);
+                display.innerText = "🎲 " + steps;
+                log(`${p.name} 擲出了 ${steps} 點`);
+                movePlayer(p, steps);
+            }
+        }, 50);
+    }
+
+    function movePlayer(p, steps) {
+        let currentStep = 0;
+        let interval = setInterval(() => {
+            p.pos++;
+            if(p.pos >= mapData.length) {
+                p.pos = 0; // 回到起點
+                p.money += 500;
+                log(`${p.name} 經過起點，獎勵 $500`);
+            }
+            drawPlayers();
+            currentStep++;
+
+            if(currentStep >= steps) {
+                clearInterval(interval);
+                handleEvent(p); // 處理停留事件
+            }
+        }, 300);
+    }
+
+    function handleEvent(p) {
+        let cell = mapData[p.pos];
+        
+        // 1. 特殊格子
+        if(cell.type === 'start') {
+            nextTurn();
+        } else if(cell.type === 'jail') {
+            log(`${p.name} 進入休息站，暫停一回合`);
+            p.stop = 1;
+            nextTurn();
+        } else if(cell.type === 'chance') {
+            triggerChance(p);
+        } else if(cell.type === 'city') {
+            // 2. 城市格子
+            let owner = landOwners[p.pos];
+            if(owner === null) {
+                // 無人地 -> 問是否購買
+                askToBuy(p, cell);
+            } else if(owner === p.id) {
+                // 自己地
+                log(`${p.name} 回到自己的地盤 ${cell.name}`);
+                nextTurn();
+            } else {
+                // 別人地 -> 付過路費
+                payRent(p, owner, cell);
+            }
+        }
+    }
+
+    // 機會命運
+    function triggerChance(p) {
+        const events = [
+            { t: "中獎發票", m: 500, txt: "運氣真好，獲得 $500" },
+            { t: "超速罰單", m: -300, txt: "被拍照了，支付 $300" },
+            { t: "撿到錢", m: 200, txt: "路上撿到 $200" },
+            { t: "請客喝飲料", m: -100, txt: "請大家喝飲料，花費 $100" }
+        ];
+        let ev = events[Math.floor(Math.random() * events.length)];
+        
+        showModal("機會/命運", ev.txt, ["確定"], () => {
+            p.money += ev.m;
+            updateUI();
+            checkBankrupt(p);
+            nextTurn();
+        });
+    }
+
+    // 支付過路費
+    function payRent(p, ownerId, cell) {
+        let rent = cell.rent;
+        let ownerName = players[ownerId].name;
+        
+        log(`${p.name} 踩到 ${ownerName} 的地，付過路費 $${rent}`);
+        p.money -= rent;
+        players[ownerId].money += rent;
+        
+        updateUI();
+        checkBankrupt(p);
+        nextTurn();
+    }
+
+    // 詢問購買
+    function askToBuy(p, cell) {
+        if(p.money < cell.price) {
+            log(`${p.name} 想買 ${cell.name} 但錢不夠 (需 $${cell.price})`);
+            nextTurn();
+            return;
+        }
+
+        showModal(`購買地產：${cell.name}`, 
+            `價格: $${cell.price}\n介紹: ${cell.desc}\n\n回答正確即可購買！`, 
+            ["挑戰題目", "放棄"], 
+            (idx) => {
+                if(idx === 0) runQuiz(p, cell);
+                else {
+                    log(`${p.name} 放棄購買 ${cell.name}`);
+                    nextTurn();
+                }
+            }
+        );
+    }
+
+    // 執行問答
+    function runQuiz(p, cell) {
+        let q = questions[Math.floor(Math.random() * questions.length)];
+        
+        // 設定彈窗內容
+        let titleEl = document.getElementById('modal-title');
+        let descEl = document.getElementById('modal-desc');
+        let optsEl = document.getElementById('modal-options');
+        let overlay = document.getElementById('modal-overlay');
+
+        titleEl.innerText = "地理大挑戰";
+        descEl.innerText = q.q;
+        optsEl.innerHTML = '';
+
+        q.opts.forEach((optText, i) => {
+            let btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = optText;
+            btn.onclick = () => {
+                // 關閉視窗
+                overlay.style.display = 'none';
+                
+                if(i === q.ans) {
+                    // 答對
+                    log(`答對了！${p.name} 買下了 ${cell.name}`);
+                    buyLand(p, cell);
+                } else {
+                    // 答錯
+                    log(`${p.name} 答錯了，購買失敗！`);
+                }
+                nextTurn();
+            };
+            optsEl.appendChild(btn);
+        });
+
+        overlay.style.display = 'flex';
+    }
+
+    // 實際執行買地動作 (資料更新 + 視覺變色)
+    function buyLand(p, cell) {
+        p.money -= cell.price;
+        landOwners[p.pos] = p.id;
+
+        // 視覺變色：抓取格子 DOM
+        let cellEl = document.getElementById(`cell-${p.pos}`);
+        cellEl.style.border = `4px solid ${p.color}`; // 變粗框
+        cellEl.style.backgroundColor = p.color.replace('rgb', 'rgba').replace(')', ', 0.15)'); // 變淡背景
+        
+        // 若使用 hex 顏色碼，這裡簡單處理直接改 border 即可，背景色選用
+        // 上面這行如果顏色格式複雜可能失效，主要靠 border
+
+        updateUI(); // 這會觸發 updateLandList 更新右側文字
+    }
+
+    // 顯示通用彈窗
+    function showModal(title, desc, btnTexts, callback) {
+        let overlay = document.getElementById('modal-overlay');
+        document.getElementById('modal-title').innerText = title;
+        document.getElementById('modal-desc').innerText = desc;
+        let opts = document.getElementById('modal-options');
+        opts.innerHTML = '';
+
+        btnTexts.forEach((txt, i) => {
+            let btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = txt;
+            btn.onclick = () => {
+                overlay.style.display = 'none';
+                if(callback) callback(i);
+            };
+            opts.appendChild(btn);
+        });
+        overlay.style.display = 'flex';
+    }
+
+    // 檢查破產
+    function checkBankrupt(p) {
+        if(p.money < 0) {
+            alert(`${p.name} 破產了！遊戲結束！`);
+            location.reload(); // 簡單重啟
+        }
+    }
+
+    // 換手
+    function nextTurn() {
+        currentTurn = (currentTurn + 1) % 4;
+        updateUI();
+        document.getElementById('dice-btn').disabled = false;
+        log(`換 ${players[currentTurn].name} 行動`);
+    }
+
+    // --- 啟動遊戲 ---
+    initGame();
+
+</script>
+</body>
+</html>
